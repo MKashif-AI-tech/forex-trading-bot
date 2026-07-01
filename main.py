@@ -1,60 +1,65 @@
-from fastapi import FastAPI
-from pydantic import BaseModel, field_validator,model_validator
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel 
+from typing import  Optional
+
 app=FastAPI()
 
+signals_db = [
+    {"id": 1, "symbol": "EURUSD", "price": 1.0856, "direction": "buy", "zone_type": "demand", },
+    {"id": 2, "symbol": "GBPUSD", "price": 1.2650, "direction": "sell", "zone_type": "supply"},
+    {"id": 3, "symbol": "EURUSD", "price": 1.0901, "direction": "buy", "zone_type": "demand", }
+]
 class TradeSignal(BaseModel):
+   
     symbol: str
     price: float
-    volume: float
     direction: str
-    stop_loss: float
-    take_profit: float
     zone_type: str
 
-    @field_validator('zone_type')
-    @classmethod
-    def validate_zone(cls, value):
-        allowed_zone=["demand", "supply"]
-        value = value.lower()
-        if value not in allowed_zone:
-
-            raise ValueError(f"zone_type must be one of {allowed_zone}")
-        return value
-
-    @field_validator('direction')
-    @classmethod
-    def validate_direction(cls, value):
-        allowed_directions=["buy", "sell"]
-        value = value.lower()
-        if value not in allowed_directions:
-            raise ValueError(f"direction must be one of {allowed_directions}")
-        return value
-
-    @model_validator(mode="after")  
-    def validate_entry(self):
-        if self.zone_type.lower()=="demand" and self.direction.lower()!="buy":
-            raise ValueError(f"{self.direction} is not an allowed direction for 'demand' zone.")
-        if self.zone_type.lower()=="supply" and self.direction.lower()!="sell":
-            raise ValueError(f"{self.direction} is not an allowed direction for 'supply' zone.")
-        return self
-
-@app.get("/")
-def health_check():
-    return {"message": "Welcome to the Trade Signal API"}
-
 @app.post("/tradesignal")
-def create_tradesignal(signal: TradeSignal):
-    return {
-        "received": True,
-        "pair": signal.symbol,
+def create_tradesignal( signal: TradeSignal):
+    
+    create={
+        "id": len(signals_db) + 1,
+        "symbol": signal.symbol,
         "price": signal.price,
-        "volume": signal.volume,
-        "stop_loss": signal.stop_loss,
-        "take_profit": signal.take_profit,
-        "zone_type":signal.zone_type,
-        "direction": signal.direction
+        "direction": signal.direction,
+        "zone_type": signal.zone_type
+    }
+    signals_db.append(create)
+
+    return {"message": "Trade signal created successfully", "data": create    
     }
 
-@app.get("/health")
-def health_check1():
-    return {"status": "ok"}
+@app.put("/tradesignal/{id}")
+def update_tradesignal(id: int, signal: TradeSignal):
+    for s in signals_db:
+        if s["id"] == id:
+            s["id"] = id
+            s["symbol"] = signal.symbol
+            s["price"] = signal.price
+            s["direction"] = signal.direction
+            s["zone_type"] = signal.zone_type
+            return {"message": "Trade signal updated successfully", "data": s}
+
+    raise HTTPException(status_code=404, detail="Trade signal not found")
+
+@app.delete("/tradesignal")
+def delete_tradesignal(id: int):
+    for index, s in enumerate(signals_db):
+        if s["id"] == id:
+            signals_db.pop(index)
+            return {"message": "Trade signal deleted successfully", "data": s}
+
+    raise HTTPException(status_code=404, detail="Trade signal not found")
+
+@app.get_signals("/signals")
+def get_signals(direction:Optional[str]=None):
+
+    return [s for s in signals_db if not direction or s["direction"].lower()==direction.lower()]
+
+@app.get("/signals/{symb}")
+def get_signalby_symbol(symb:str):
+    matches=[s for s in signals_db if s["symbol"].lower()==symb.lower()]
+    return matches
+
