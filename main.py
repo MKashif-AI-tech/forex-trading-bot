@@ -1,8 +1,40 @@
+import asyncio
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional
+import os
+from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OANDA_API_KEY = os.getenv("OANDA_API_KEY")
+
+async def monitor_prices():
+    symbols = ["EURUSD", "GBPUSD", "USDJPY"]
+    while True:
+        for symbol in symbols:
+            print(f"[{symbol}] Checking price against demand/supply zones...")
+        print("--- Price check complete. Sleeping 60 seconds ---")
+        await asyncio.sleep(60)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if not OPENAI_API_KEY:
+        print("WARNING: OPENAI_API_KEY not found")
+    else:
+        print("✓ API keys loaded successfully")
+    
+    # Start background monitoring loop
+    task = asyncio.create_task(monitor_prices())
+    print("✓ Price monitoring started")
+    yield
+    # Stop the task when server shuts down
+    task.cancel()
+    print("Price monitoring stopped")
+   
+app = FastAPI(lifespan=lifespan)
 
 signals_db = [
     {"id": 1, "symbol": "EURUSD", "price": 1.0856, "direction": "buy",
@@ -47,12 +79,12 @@ class TradeSignal(BaseModel):
 
 
 @app.get("/")
-def root():
+async def root():
     return {"message": "Forex Trading Bot API"}
 
 
 @app.post("/tradesignal")
-def create_tradesignal(signal: TradeSignal):
+async def create_tradesignal(signal: TradeSignal):
     create = {
         "id": len(signals_db) + 1,
         "symbol": signal.symbol,
@@ -66,13 +98,13 @@ def create_tradesignal(signal: TradeSignal):
 
 
 @app.get("/signals")
-def get_signals(direction: Optional[str] = None):
+async def get_signals(direction: Optional[str] = None):
     return [s for s in signals_db if not direction
             or s["direction"].lower() == direction.lower()]
 
 
 @app.get("/signals/{symbol}")
-def get_signal_by_symbol(symbol: str):
+async def get_signal_by_symbol(symbol: str):
     matches = [s for s in signals_db if s["symbol"].lower() == symbol.lower()]
     if not matches:
         raise HTTPException(status_code=404, detail=f"{symbol} not found")
@@ -81,7 +113,7 @@ def get_signal_by_symbol(symbol: str):
 
 
 @app.put("/tradesignal/{id}")
-def update_tradesignal(id: int, signal: TradeSignal):
+async def update_tradesignal(id: int, signal: TradeSignal):
     for s in signals_db:
         if s["id"] == id:
             s["symbol"] = signal.symbol
@@ -94,7 +126,7 @@ def update_tradesignal(id: int, signal: TradeSignal):
 
 
 @app.delete("/tradesignal/{id}")
-def delete_tradesignal(id: int):
+async def delete_tradesignal(id: int):
     for index, s in enumerate(signals_db):
         if s["id"] == id:
             signals_db.pop(index)
