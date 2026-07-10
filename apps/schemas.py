@@ -18,8 +18,8 @@ class TradeSignal(BaseModel):
     @field_validator('zone_type')
     @classmethod
     def validate_zone(cls, value):
-        allowed = ["demand", "supply"]
-        value = value.lower()
+        allowed = ["DEMAND", "SUPPLY"]
+        value = value.upper()
         if value not in allowed:
             raise ValueError(f"zone_type must be one of {allowed}")
         return value
@@ -61,3 +61,17 @@ class TradeSignal(BaseModel):
                 raise ValueError("Take profit must be less than the price for sell direction")
         return self
 
+class UserCreate(BaseModel):
+    username: str=Field(min_length=3, max_length=50, description="Username must be between 3 and 50 characters")
+    email: str=Field(pattern="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", description="Invalid email format")
+    password: str=Field(min_length=6, description="Password must be at least 6 characters")
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str

@@ -1,17 +1,25 @@
 import asyncio
-from apps.data import signals_db
+
+from apps.database import SessionLocal
+from apps.services.signal_service import get_signals
+
+
 async def monitor_prices():
-    
 
     while True:
+        db = SessionLocal()
 
-        for s in signals_db:
+        try:
+            signals = get_signals(db)
 
-            try:
+            for s in signals:
                 print(f"[{s['symbol']}] Checking price against demand/supply zones...")
 
-            except Exception as e:
-                print(f"Error occurred while checking {s['symbol']}: {e}")
+        except Exception as e:
+            print(f"Error occurred while checking signals: {e}")
+
+        finally:
+            db.close()
 
         print("--- Price check complete. Sleeping 60 seconds ---")
 

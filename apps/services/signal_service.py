@@ -1,60 +1,94 @@
-from fastapi import HTTPException,status,APIRouter
-from apps.data import signals_db
-from apps.schemas import TradeSignal
 from typing import Optional
+from unittest import result
+from sqlalchemy.orm import Session
 
-router = APIRouter()
-@router.get("/")
-def root():
-    return {"message": "Forex Trading Bot API"}
+from apps.database import get_db
+from apps.models import TradeSignalDB
+from apps.schemas import TradeSignal
 
 
-@router.post("/tradesignal" ,status_code=status.HTTP_201_CREATED)
-def create_tradesignal(signal: TradeSignal):
-    create = {
-        "id": len(signals_db) + 1,
+def signal_to_dict(signal: TradeSignalDB):
+    return {
+        "id": signal.id,
         "symbol": signal.symbol,
         "price": signal.price,
         "direction": signal.direction,
         "zone_type": signal.zone_type,
-        "risk": signal.risk.model_dump()
+        "risk": {
+            "stop_loss": signal.stop_loss,
+            "take_profit": signal.take_profit,
+            "risk_percent": signal.risk_percent,
+        },
     }
-    signals_db.append(create)
-    return {"message": "Trade signal created", "data": create}
 
 
-@router.get("/signals")
-def get_signals(symbol: Optional[str] = None):
-    return [s for s in signals_db if not symbol or s["symbol"].lower() == symbol.lower()]
+def create_tradesignal(db: Session, signal: TradeSignal ):
+    db_signal = TradeSignalDB(
+        symbol=signal.symbol,
+        price=signal.price,
+        direction=signal.direction,
+        zone_type=signal.zone_type,
+        stop_loss=signal.risk.stop_loss,
+        take_profit=signal.risk.take_profit,
+        risk_percent=signal.risk.risk_percent,
+    )
+
+    db.add(db_signal)
+    db.commit()
+    db.refresh(db_signal)
+
+    return signal_to_dict(db_signal)
 
 
-@router.get("/signals/{id}")
-def get_signal_by_id(id: int):
-    
-    for s in signals_db:
-        if s["id"] == id:
-            return s
-    raise HTTPException(status_code=404, detail=f"Signal with id {id} not found")
-    
+def get_signals( db: Session,symbol: Optional[str] = None):
+    query = db.query(TradeSignalDB)
+
+    if symbol:
+        query = query.filter(TradeSignalDB.symbol == symbol.upper())
+    result = []
+
+    for signal in query.all():
+        result.append(signal_to_dict(signal))
+
+    return result
 
 
-@router.put("/tradesignal/{id}")
-def update_tradesignal(id: int, signal: TradeSignal):
-    for s in signals_db:
-        if s["id"] == id:
-            s["symbol"] = signal.symbol
-            s["price"] = signal.price
-            s["direction"] = signal.direction
-            s["zone_type"] = signal.zone_type
-            s["risk"] = signal.risk.model_dump()
-            return {"message": "Signal updated", "data": s}
-    raise HTTPException(status_code=404, detail=f"Signal with id {id} not found")
+def get_signal_by_id( db: Session,signal_id: int):
+    signal = db.get(TradeSignalDB, signal_id)
+
+    if signal is None:
+        return None
+
+    return signal_to_dict(signal)
 
 
-@router.delete("/tradesignal/{id}")
-def delete_tradesignal(id: int):
-    for index, s in enumerate(signals_db):
-        if s["id"] == id:
-            signals_db.pop(index)
-            return {"message": f"Signal {id} deleted"}
-    raise HTTPException(status_code=404, detail=f"Signal with id {id} not found")
+def update_tradesignal(db: Session,signal_id: int, signal: TradeSignal):
+    db_signal = db.get(TradeSignalDB, signal_id)
+
+    if db_signal is None:
+        return None
+
+    db_signal.symbol = signal.symbol
+    db_signal.price = signal.price
+    db_signal.direction = signal.direction
+    db_signal.zone_type = signal.zone_type
+    db_signal.stop_loss = signal.risk.stop_loss
+    db_signal.take_profit = signal.risk.take_profit
+    db_signal.risk_percent = signal.risk.risk_percent
+
+    db.commit()
+    db.refresh(db_signal)
+
+    return signal_to_dict(db_signal)
+
+
+def delete_tradesignal(db: Session, signal_id: int = None):
+    db_signal = db.get(TradeSignalDB, signal_id)
+
+    if db_signal is None:
+        return False
+
+    db.delete(db_signal)
+    db.commit()
+
+    return True
