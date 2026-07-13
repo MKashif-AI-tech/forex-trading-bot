@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Float, Integer, String
-
+from sqlalchemy import Column, Float, Integer, String,ForeignKey
+from sqlalchemy.orm import relationship
 from apps.database import Base
 
 
@@ -13,7 +13,17 @@ class TradeSignalDB(Base):
     zone_type = Column(String, nullable=False)
     stop_loss = Column(Float, nullable=False)
     take_profit = Column(Float, nullable=False)
-    risk_percent = Column(Float, nullable=False)
+
+    owner_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False
+    )
+
+    owner = relationship(
+        "UserDB",
+        back_populates="signals"
+    )
 
 class UserDB(Base):
     __tablename__ = "users"
@@ -22,3 +32,7 @@ class UserDB(Base):
     username = Column(String, unique=True, nullable=False)
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    signals = relationship(
+        "TradeSignalDB",
+        back_populates="owner"
+    )

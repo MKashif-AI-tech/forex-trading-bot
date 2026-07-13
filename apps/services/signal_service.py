@@ -1,10 +1,9 @@
 from typing import Optional
-from unittest import result
+
 from sqlalchemy.orm import Session
 
-from apps.database import get_db
 from apps.models import TradeSignalDB
-from apps.schemas import TradeSignal
+from apps.schemas import TradeSignal, UserResponse
 
 
 def signal_to_dict(signal: TradeSignalDB):
@@ -16,13 +15,16 @@ def signal_to_dict(signal: TradeSignalDB):
         "zone_type": signal.zone_type,
         "risk": {
             "stop_loss": signal.stop_loss,
-            "take_profit": signal.take_profit,
-            "risk_percent": signal.risk_percent,
-        },
+            "take_profit": signal.take_profit
+        }
     }
 
 
-def create_tradesignal(db: Session, signal: TradeSignal ):
+def create_tradesignal(
+    db: Session,
+    signal: TradeSignal,
+    current_user: UserResponse
+):
     db_signal = TradeSignalDB(
         symbol=signal.symbol,
         price=signal.price,
@@ -30,7 +32,7 @@ def create_tradesignal(db: Session, signal: TradeSignal ):
         zone_type=signal.zone_type,
         stop_loss=signal.risk.stop_loss,
         take_profit=signal.risk.take_profit,
-        risk_percent=signal.risk.risk_percent,
+        owner_id=current_user.id
     )
 
     db.add(db_signal)
@@ -40,21 +42,35 @@ def create_tradesignal(db: Session, signal: TradeSignal ):
     return signal_to_dict(db_signal)
 
 
-def get_signals( db: Session,symbol: Optional[str] = None):
-    query = db.query(TradeSignalDB)
+def get_signals(
+    db: Session,
+    current_user: UserResponse,
+    symbol: Optional[str] = None
+):
+    query = db.query(TradeSignalDB).filter(
+        TradeSignalDB.owner_id == current_user.id
+    )
 
     if symbol:
-        query = query.filter(TradeSignalDB.symbol == symbol.upper())
-    result = []
+        query = query.filter(
+            TradeSignalDB.symbol == symbol.upper()
+        )
 
-    for signal in query.all():
-        result.append(signal_to_dict(signal))
+    return [
+        signal_to_dict(signal)
+        for signal in query.all()
+    ]
 
-    return result
 
-
-def get_signal_by_id( db: Session,signal_id: int):
-    signal = db.get(TradeSignalDB, signal_id)
+def get_signal_by_id(
+    db: Session,
+    signal_id: int,
+    current_user: UserResponse
+):
+    signal = db.query(TradeSignalDB).filter(
+        TradeSignalDB.id == signal_id,
+        TradeSignalDB.owner_id == current_user.id
+    ).first()
 
     if signal is None:
         return None
@@ -62,8 +78,16 @@ def get_signal_by_id( db: Session,signal_id: int):
     return signal_to_dict(signal)
 
 
-def update_tradesignal(db: Session,signal_id: int, signal: TradeSignal):
-    db_signal = db.get(TradeSignalDB, signal_id)
+def update_tradesignal(
+    db: Session,
+    signal_id: int,
+    signal: TradeSignal,
+    current_user: UserResponse
+):
+    db_signal = db.query(TradeSignalDB).filter(
+        TradeSignalDB.id == signal_id,
+        TradeSignalDB.owner_id == current_user.id
+    ).first()
 
     if db_signal is None:
         return None
@@ -74,7 +98,6 @@ def update_tradesignal(db: Session,signal_id: int, signal: TradeSignal):
     db_signal.zone_type = signal.zone_type
     db_signal.stop_loss = signal.risk.stop_loss
     db_signal.take_profit = signal.risk.take_profit
-    db_signal.risk_percent = signal.risk.risk_percent
 
     db.commit()
     db.refresh(db_signal)
@@ -82,8 +105,15 @@ def update_tradesignal(db: Session,signal_id: int, signal: TradeSignal):
     return signal_to_dict(db_signal)
 
 
-def delete_tradesignal(db: Session, signal_id: int = None):
-    db_signal = db.get(TradeSignalDB, signal_id)
+def delete_tradesignal(
+    db: Session,
+    signal_id: int,
+    current_user: UserResponse
+):
+    db_signal = db.query(TradeSignalDB).filter(
+        TradeSignalDB.id == signal_id,
+        TradeSignalDB.owner_id == current_user.id
+    ).first()
 
     if db_signal is None:
         return False

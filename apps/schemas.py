@@ -3,7 +3,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class Risk(BaseModel):
     stop_loss: float
     take_profit: float
-    risk_percent: float = Field(gt=0, le=5, description="Risk percent must be greater than 0")
 
 
 class TradeSignal(BaseModel):
@@ -43,9 +42,9 @@ class TradeSignal(BaseModel):
 
         direction = self.direction.lower()
 
-        if self.zone_type == "demand" and direction != "buy":
+        if self.zone_type == "DEMAND" and direction != "buy":
             raise ValueError("Demand zone requires buy direction")
-        if self.zone_type == "supply" and direction != "sell":
+        if self.zone_type == "SUPPLY" and direction != "sell":
             raise ValueError("Supply zone requires sell direction")
         
         if direction=="buy":
